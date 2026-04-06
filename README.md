@@ -224,6 +224,8 @@ optimizer = "MuSGD",
 
 ## Dataset
 
+Full image set (raw, pre-Roboflow): [Google Drive](https://drive.google.com/drive/folders/1FYghRhCDaKD6pSlmFUVUMeCMTMQFqUuA?usp=drive_link)
+
 Downloaded from Roboflow in **Folder Structure** format.
 Augmentation was applied in Roboflow; no additional augmentation is applied during training.
 

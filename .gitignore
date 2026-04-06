@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Large files (exceed GitHub 100MB limit)
+roboflow_upload/
+labelbox_utils/imagenes_labelbox.zip
+labelbox_utils/config.yml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/

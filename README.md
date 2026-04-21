@@ -126,6 +126,49 @@ python convert2engine.py
 # produces best.engine
 ```
 
+### convert2engine4jetson.py — Install & Convert Models from Jetson Device
+
+Export a YOLO model **natively on a Jetson Orin** running JetPack 6.2 (Compute Capability 8.7) directly to a TensorRT `.engine` file. This bypasses cross-compilation and ensures hardware-optimal libraries are used.
+
+#### Step 1: Install Jetson-Optimized PyTorch
+
+Generic PyTorch wheels drop support for Jetson hardware. You must install the wheels hosted by the NVIDIA Jetson AI Lab for JetPack 6.2 / CUDA 12.6.
+
+```bash
+# Ensure your virtual environment is active
+source /home/jetson/Magdalena-YOLOv26-TrainingPipeline/venv/bin/activate
+
+# Prevent NumPy 2.0 from breaking PyTorch C++ bindings
+pip install "numpy<2"
+
+# Install JetPack 6.2 specific wheels
+pip install torch torchvision torchaudio --index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+```
+
+#### Step 2: Fix the Missing libcudss.so.0 Dependency
+
+JetPack 6.2 has a known issue where the newer PyTorch wheels expect the cuDSS library that is not present on the system. Download and symlink it to the OS system libraries:
+
+```bash
+# 1. Download the library into your venv without generic CUDA dependencies
+pip install nvidia-cudss-cu12 --no-deps
+
+# 2. Find the downloaded file and symlink it to the OS system libraries
+sudo ln -s $(find /home/jetson/Magdalena-YOLOv26-TrainingPipeline/venv -name "libcudss.so.0" | head -n 1) /usr/lib/aarch64-linux-gnu/libcudss.so.0
+```
+
+#### Step 3: Convert Model to TensorRT Engine
+
+Place `best.pt` in the project root and run the conversion script:
+
+```bash
+cp runs/classify/magdalena/plant_cls_v1/weights/best.pt .
+python convert2engine4jetson.py
+# produces best.engine
+```
+
+The script exports the PyTorch model to a TensorRT `.engine` file optimized for your Jetson Orin hardware.
+
 ---
 
 ## System Requirements

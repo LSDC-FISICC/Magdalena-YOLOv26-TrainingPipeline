@@ -192,11 +192,15 @@ print(f"  Errors:                {len(errors_list):6d}")
 if incorrect > 0 and len(predictions) > 0:
     print(f"\n  Misclassified ({len([p for p in predictions if not p['correct']])}):")
     print("showing first 5 misclassifications:")
-    for pred in predictions[:5]:
+    n=0
+    for pred in predictions:
         if not pred['correct']:
-            print(f"    • {pred['image'][:40]:40s}")
+            n+=1
+            print(f"    • {pred['image'][:16]:16s}")
             print(f"      True: {pred['true']:10s} | Pred: {pred['pred']:10s} "
                   f"({pred['confidence']:5.1%})")
+            if n>=5:
+                break
 
 if errors_list:
     print(f"\n  Processing Errors ({len(errors_list)}):")

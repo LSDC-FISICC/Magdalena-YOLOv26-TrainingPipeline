@@ -1,22 +1,21 @@
-#pragma once // Optionnel mais fortement recommandé si c'est un .hpp
+#pragma once
 
-// --- STL (Bibliothèque standard C++) ---
-#include <memory>  // Pour std::shared_ptr et std::make_shared
-#include <vector>  // Pour std::vector (le stockage de tes publishers et topics)
-#include <string>  // Pour std::string et std::to_string
-#include <mutex>   // Pour std::mutex et std::lock_guard (sécurisation du buffer d'images)
-#include <chrono>  // Pour std::chrono::milliseconds (la configuration du Timer à 20Hz)
+#include <memory>  //  std::shared_ptr et std::make_shared
+#include <vector>  //  std::vector 
+#include <string>  //  std::string et std::to_string
+#include <mutex>   //  std::mutex et std::lock_guard 
+#include <chrono>  //  std::chrono::milliseconds
 
 // --- ROS 2 Core ---
 #include "rclcpp/rclcpp.hpp"
 
 // --- Messages ROS 2 Standard ---
-#include "sensor_msgs/msg/image.hpp"  // Pour le type de message sensor_msgs::msg::Image
-#include "std_msgs/msg/header.hpp"    // Pour manipuler le header (stamp et frame_id)
+#include "sensor_msgs/msg/image.hpp"  
+#include "std_msgs/msg/header.hpp" 
 
-// --- OpenCV & cv_bridge (Conversion Vision) ---
-#include "cv_bridge/cv_bridge.hpp"       // Pour faire la passerelle entre ROS 2 et OpenCV
-#include <opencv2/opencv.hpp>          // Pour cv::Mat, cv::resize, cv::Rect, etc.
+// --- OpenCV & cv_bridge ---
+#include "cv_bridge/cv_bridge.hpp"      
+#include <opencv2/opencv.hpp>          //cv::Mat, cv::resize, cv::Rect, etc.
 
 class cameraNode : public rclcpp::Node {
     public : 
@@ -25,20 +24,28 @@ class cameraNode : public rclcpp::Node {
 
     private :
 
+    //function to receive the images and to save them in m_imageBuffer
     void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg, const std::string& topic_name);
 
+    //function to process the images and publish them
     void timerCallback();
 
+    //List of camera Topics for the subscription
     std::vector<std::string> m_cameraTopics;
 
+    //subscription
+    std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> m_subscriptions;
+
+    //publisher
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr m_preprocessedImgPub;
 
+    //timer
     rclcpp::TimerBase::SharedPtr m_timer;
 
+    //buffer to save the images from the cameras
     std::mutex m_bufferMutex;
-
     std::map<std::string, sensor_msgs::msg::Image::SharedPtr> m_imageBuffer;
 
-    std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> m_subscriptions;
+    
 
 };

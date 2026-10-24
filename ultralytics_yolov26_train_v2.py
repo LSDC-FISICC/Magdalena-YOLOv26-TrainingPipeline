@@ -22,7 +22,7 @@ import torchvision.transforms as T
 
 # ─── Configuration ────────────────────────────────────────────────
 DATASET_DIR  = "sugarcane_exg_hsv_lab_v3-2-100.v1i.folder/"
-MODEL        = "yolo26s-cls.pt"
+MODEL        = "yolo26n-cls.pt"
 PROJECT      = "magdalena"
 RUN_NAME     = "plant_cls_ExG_HSV_Lab_Curation_100_lr_0.0005_4500_WD_0.04"
 EPOCHS       = 30
@@ -89,7 +89,7 @@ class RectTrainer(ClassificationTrainer):
 
 # ── 1. TRAINING ───────────────────────────────────────────────────
 print("=" * 60)
-print("  YOLO26s — Magdalena Plant Classification")
+print("  YOLO26n — Magdalena Plant Classification")
 print(f"  Train: 8,397 | Val: 799 | Test: 400")
 print(f"  Image size: {IMG_W}x{IMG_H}")
 print(f"  Device: {DEVICE} | Batch: {BATCH}")

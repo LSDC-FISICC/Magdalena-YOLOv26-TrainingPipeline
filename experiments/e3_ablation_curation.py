@@ -103,7 +103,7 @@ def main():
     ap.add_argument("--seeds", default="0,1,2")
     ap.add_argument("--strategy", choices=["random", "confidence"], default="random")
     ap.add_argument("--scorer", help="weights trained at 0%% curation, for --strategy confidence")
-    ap.add_argument("--model", default="yolo26s-cls.pt")
+    ap.add_argument("--model", default="yolo26n-cls.pt")
     ap.add_argument("--work", default="experiments/work/e3")
     ap.add_argument("--out", default="experiments/results/e3_curation")
     ap.add_argument("--epochs", type=int, help="override configs/train.yaml (e.g. shorter CPU runs)")

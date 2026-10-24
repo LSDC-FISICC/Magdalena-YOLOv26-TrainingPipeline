@@ -15,8 +15,8 @@ report them in the paper (e.g. 15 W / MAXN SUPER, clocks locked).
 
 Examples (on the Jetson):
   sudo jetson_clocks
-  python experiments/e6_benchmark_latency.py --engine best_fp16.engine --tag yolo26s_fp16
-  python experiments/e6_benchmark_latency.py --engine best_fp32.engine --tag yolo26s_fp32
+  python experiments/e6_benchmark_latency.py --engine best_fp16.engine --tag yolo26n_fp16
+  python experiments/e6_benchmark_latency.py --engine best_fp32.engine --tag yolo26n_fp32
   # any ONNX model (e.g. MobileNetV3 from e4 --export-onnx) can be compiled first:
   /usr/src/tensorrt/bin/trtexec --onnx=m.onnx --saveEngine=m.engine --fp16 \
       --minShapes=images:1x3x96x320 --optShapes=images:5x3x96x320 --maxShapes=images:5x3x96x320

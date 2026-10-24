@@ -39,7 +39,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", action="append", required=True, metavar="NAME=DIR")
     ap.add_argument("--arch", action="append", metavar="WEIGHTS_OR_TV_ARCH",
-                    help="yolo26*-cls.pt or a torchvision arch (default yolo26s-cls.pt)")
+                    help="yolo26*-cls.pt or a torchvision arch (default yolo26n-cls.pt)")
     ap.add_argument("--gt", help="GT csv")
     ap.add_argument("--seeds", default="0")
     ap.add_argument("--block-split", action="store_true")
@@ -59,7 +59,7 @@ def main():
     from mexp.models import Predictor
     from mexp.train import load_cfg, train_yolo
 
-    archs = args.arch or ["yolo26s-cls.pt"]
+    archs = args.arch or ["yolo26n-cls.pt"]
     gt = read_csv(args.gt) if args.gt else None
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     cfg = load_cfg(epochs=args.epochs, patience=args.patience, batch=args.batch)

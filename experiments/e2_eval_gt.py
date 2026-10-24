@@ -13,8 +13,8 @@ the same images; the output contains:
 
 Example:
   python experiments/e2_eval_gt.py --gt experiments/gt/gt.csv \
-      --model yolo26s_curated=runs/classify/magdalena/plant_cls_v4/weights/best.pt \
-      --model yolo26s_uncurated=runs/classify/magdalena/plant_cls_v3/weights/best.pt
+      --model yolo26n_curated=runs/classify/magdalena/plant_cls_v4/weights/best.pt \
+      --model yolo26n_uncurated=runs/classify/magdalena/plant_cls_v3/weights/best.pt
   # a folder dataset split can be used instead of gt.csv (e.g. a pseudo-labelled test):
   python experiments/e2_eval_gt.py --gt-folder dataset2/test --model v4=...best.pt
 """

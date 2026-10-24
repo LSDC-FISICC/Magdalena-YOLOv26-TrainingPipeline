@@ -32,7 +32,7 @@ def load_cfg(path=None, **overrides):
     return cfg
 
 
-def train_yolo(data, project, name, model="yolo26s-cls.pt", cfg=None, seed=0, device=None, **overrides):
+def train_yolo(data, project, name, model="yolo26n-cls.pt", cfg=None, seed=0, device=None, **overrides):
     """Train and return the path of best.pt. ``cfg`` holds the shared hyper-parameters."""
     cfg = dict(cfg or load_cfg())
     cfg.update(overrides)

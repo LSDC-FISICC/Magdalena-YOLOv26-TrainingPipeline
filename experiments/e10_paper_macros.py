@@ -15,8 +15,8 @@ is missing. \\input{results_macros.tex} after the \\todoNote definition.
   \\ResFieldAccYolo, \\ResFieldAccIndex  E9 field_ab.json
 
 Example:
-  python experiments/e10_paper_macros.py --model yolo26s_curated --supervisor cascade_hsv_lab_exgr \
-      --e6-tag yolo26s_fp16 --policy time:500 --out paper/results_macros.tex
+  python experiments/e10_paper_macros.py --model yolo26n_curated --supervisor cascade_hsv_lab_exgr \
+      --e6-tag yolo26n_fp16 --policy time:500 --out paper/results_macros.tex
 """
 
 import argparse
@@ -47,7 +47,7 @@ def main():
     ap.add_argument("--e3-strategy", default="random")
     ap.add_argument("--e3-tolerance-pp", type=float, default=1.0,
                     help="smallest curated fraction whose mean accuracy is within this of 100%% curation")
-    ap.add_argument("--e6-tag", default="yolo26s_fp16")
+    ap.add_argument("--e6-tag", default="yolo26n_fp16")
     ap.add_argument("--policy", default="time:500")
     ap.add_argument("--out", default="experiments/results/results_macros.tex")
     args = ap.parse_args()

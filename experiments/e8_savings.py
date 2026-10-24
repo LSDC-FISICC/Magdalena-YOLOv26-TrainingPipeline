@@ -22,7 +22,7 @@ The % reduction does not depend on flow or speed; litres per hectare need
 Examples:
   python experiments/e8_savings.py --log logs/decisions_*.csv \
       --policies none,time:500,kofn:3/2,asym:3/2 --speed-kmh 6 \
-      --gt-metrics experiments/results/e2_gt/metrics.json --model-name yolo26s_curated
+      --gt-metrics experiments/results/e2_gt/metrics.json --model-name yolo26n_curated
   python experiments/e8_savings.py --frames recording_session_frames/ --weights best.pt
   python experiments/e8_savings.py --frames recording_session_frames/ --labeller cascade_hsv_lab_exgr
 """

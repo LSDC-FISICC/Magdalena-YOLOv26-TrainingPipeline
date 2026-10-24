@@ -41,7 +41,8 @@ def train_yolo(data, project, name, model="yolo26s-cls.pt", cfg=None, seed=0, de
         weights = REPO_ROOT / model
     yolo = YOLO(str(weights))
     yolo.train(
-        data=str(data), project=str(project), name=name, exist_ok=True,
+        # absolute: Ultralytics prefixes relative projects with runs/classify/
+        data=str(data), project=str(Path(project).resolve()), name=name, exist_ok=True,
         imgsz=[IMG_H, IMG_W], trainer=RectTrainer, seed=seed, deterministic=True,
         device=default_device() if device is None else device,
         # Roboflow already augmented the training split

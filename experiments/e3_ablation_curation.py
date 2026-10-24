@@ -106,6 +106,10 @@ def main():
     ap.add_argument("--model", default="yolo26s-cls.pt")
     ap.add_argument("--work", default="experiments/work/e3")
     ap.add_argument("--out", default="experiments/results/e3_curation")
+    ap.add_argument("--epochs", type=int, help="override configs/train.yaml (e.g. shorter CPU runs)")
+    ap.add_argument("--patience", type=int)
+    ap.add_argument("--batch", type=int)
+    ap.add_argument("--device", help="0 (GPU) or cpu; default autodetect")
     ap.add_argument("--block-len", type=int, default=300)
     ap.add_argument("--block-gap", type=int, default=30)
     ap.add_argument("--block-seed", type=int, default=0)
@@ -143,7 +147,10 @@ def main():
             if not args.dry_run:
                 from mexp.models import Predictor
                 from mexp.train import train_yolo
-                best = train_yolo(dst, Path(args.work) / "runs", name, model=args.model, seed=seed)
+                from mexp.train import load_cfg
+                cfg = load_cfg(epochs=args.epochs, patience=args.patience, batch=args.batch)
+                best = train_yolo(dst, Path(args.work) / "runs", name, model=args.model, cfg=cfg, seed=seed,
+                                  device=args.device)
                 row["weights"] = str(best)
                 if gt:
                     pred, _ = Predictor(best).predict([r["path"] for r in gt])

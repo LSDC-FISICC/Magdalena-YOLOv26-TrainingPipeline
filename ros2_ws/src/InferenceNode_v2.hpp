@@ -2,7 +2,12 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+// cv_bridge.hpp exists from cv_bridge 3.3 (Iron); stock Humble (3.2.x) only ships cv_bridge.h
+#if __has_include(<cv_bridge/cv_bridge.hpp>)
 #include <cv_bridge/cv_bridge.hpp>
+#else
+#include <cv_bridge/cv_bridge.h>
+#endif
 #include <vector>
 #include <string>
 #include <map>

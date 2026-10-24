@@ -36,7 +36,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mexp import debounce  # noqa: E402
-from mexp.data import list_folder_dataset, read_csv, unique_sources, write_csv  # noqa: E402
+from mexp.data import IMG_EXT, frame_id, list_folder_dataset, read_csv, unique_sources, write_csv  # noqa: E402
 
 
 def sequences_from_logs(paths, method="yolo"):
@@ -53,8 +53,11 @@ def sequences_from_logs(paths, method="yolo"):
 
 def sequences_from_frames(folder, weights, fps):
     from mexp.models import Predictor
-    rows = sorted((r for r in unique_sources(list_folder_dataset(folder)) if r["frame"] is not None),
-                  key=lambda r: r["frame"])
+    rows = unique_sources(list_folder_dataset(folder))
+    if not rows:  # plain folder of raw frames, no plant/no_plant sub-folders
+        rows = [{"path": str(p), "label": "", "frame": frame_id(p), "source": p.stem}
+                for p in Path(folder).iterdir() if p.suffix.lower() in IMG_EXT]
+    rows = sorted((r for r in rows if r["frame"] is not None), key=lambda r: r["frame"])
     pred, _ = Predictor(weights).predict([r["path"] for r in rows])
     labelled = all(r["label"] for r in rows)
     seq = [(r["frame"] / fps, p == "plant", (r["label"] == "plant") if labelled else None)

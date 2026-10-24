@@ -9,10 +9,10 @@ macros for the placeholders of the abstract and introduction.
 
 | Exp. | Script | Paper claim / placeholder | Runs on | Needs |
 |---|---|---|---|---|
-| E0 | `e0_audit_dataset.py` | dataset description, leakage-free split | CPU | Roboflow folder datasets |
+| E0 | `e0_audit_dataset.py`, `e0_label_agreement.py` | dataset description, leakage-free split, agreement (κ) between labelling variants | CPU | Roboflow folder datasets |
 | E1 | `e1_gt_sample.py`, `e1_annotate.py`, `e1_agreement.py` | independent GT: *n images, two annotators, Cohen's κ* | CPU + 2 people | raw frames or field snapshots |
 | E2 | `e2_eval_gt.py` | *accuracy [XX %]*, *exceeded the colour index that supervised it by [XX] pp* | CPU/GPU | GT + trained weights |
-| E3 | `e3_ablation_curation.py` | *ablation over the curated fraction [0/10/50/100 %]* | GPU (RTX 3070) | pseudo-labelled **and** curated version of the same frames |
+| E3 | `e3_ablation_curation.py` | *ablation over the curated fraction [0/10/50/100 %]* | GPU (RTX 3070) | pseudo-labelled **and** curated labelling of the same frames (matched by frame name, any split) |
 | E4 | `e4_roboflow_download.py`, `e4_train_compare.py` | *cascaded HSV, LAB and ExGR masks replace most manual labelling* (one model per Roboflow labelling variant) | GPU | the 10 Roboflow projects |
 | E5 | `e4_train_compare.py --arch …` | comparison with MobileNetV3 / EfficientNet-B0 / ResNet18 / YOLO26n | GPU | one dataset |
 | E6 | `e6_benchmark_latency.py` | *throughput [XX] images per second*, inference latency, energy per image | Jetson Orin Nano | `.engine` files |
@@ -57,6 +57,7 @@ macros for the placeholders of the abstract and introduction.
 python experiments/e4_roboflow_download.py --list <workspace>
 python experiments/e4_roboflow_download.py --out roboflow <workspace>/<project>/<version> ...
 python experiments/e0_audit_dataset.py --data dataset2 --make-block-split dataset2_block
+python experiments/e0_label_agreement.py --dataset roboflow/* --reference sugarcane_exg_hsv_lab_v3-2-100
 
 # 1. Independent GT (two annotators, blind)
 python experiments/e1_gt_sample.py --source <raw_frames_or_snapshots> [--block-test] --n 300
@@ -69,7 +70,8 @@ python experiments/e1_agreement.py --manifest experiments/gt/manifest.csv \
 python experiments/e4_train_compare.py --gt experiments/gt/gt.csv --block-split \
     --dataset cascade_curated=dataset2 --seeds 0,1,2 --export-onnx
 python experiments/e2_eval_gt.py --gt experiments/gt/gt.csv --model yolo26s_curated=<best.pt>
-python experiments/e3_ablation_curation.py --pseudo roboflow/<cascade_uncurated> --curated roboflow/<cascade_curated> \
+python experiments/e3_ablation_curation.py --pseudo roboflow/sugarcane_exg_hsv_lab_v3 \
+    --curated roboflow/sugarcane_exg_hsv_lab_v3-2-100 \
     --gt experiments/gt/gt.csv --fractions 0,10,25,50,100 --seeds 0,1,2
 python experiments/e4_train_compare.py --gt experiments/gt/gt.csv --block-split \
     --dataset hsv_v1=roboflow/sugarcanehsv_v1 --dataset exg_v1=roboflow/sugarcaneexg_v1 ...

@@ -24,6 +24,7 @@ Examples:
       --policies none,time:500,kofn:3/2,asym:3/2 --speed-kmh 6 \
       --gt-metrics experiments/results/e2_gt/metrics.json --model-name yolo26s_curated
   python experiments/e8_savings.py --frames recording_session_frames/ --weights best.pt
+  python experiments/e8_savings.py --frames recording_session_frames/ --labeller cascade_hsv_lab_exgr
 """
 
 import argparse
@@ -51,14 +52,20 @@ def sequences_from_logs(paths, method="yolo"):
     return {k: sorted(v) for k, v in seq.items()}
 
 
-def sequences_from_frames(folder, weights, fps):
-    from mexp.models import Predictor
+def sequences_from_frames(folder, weights, fps, labeller=None):
     rows = unique_sources(list_folder_dataset(folder))
     if not rows:  # plain folder of raw frames, no plant/no_plant sub-folders
         rows = [{"path": str(p), "label": "", "frame": frame_id(p), "source": p.stem}
                 for p in Path(folder).iterdir() if p.suffix.lower() in IMG_EXT]
     rows = sorted((r for r in rows if r["frame"] is not None), key=lambda r: r["frame"])
-    pred, _ = Predictor(weights).predict([r["path"] for r in rows])
+    if labeller:  # colour-index baseline (HSV mask / cascade / CV-Pipeline ExG) instead of a model
+        from concurrent.futures import ProcessPoolExecutor
+        from mexp.pseudolabel import LABELERS
+        with ProcessPoolExecutor() as ex:
+            pred = list(ex.map(LABELERS[labeller], [r["path"] for r in rows], chunksize=64))
+    else:
+        from mexp.models import Predictor
+        pred, _ = Predictor(weights).predict([r["path"] for r in rows])
     labelled = all(r["label"] for r in rows)
     seq = [(r["frame"] / fps, p == "plant", (r["label"] == "plant") if labelled else None)
            for r, p in zip(rows, pred)]
@@ -76,6 +83,7 @@ def main():
     g.add_argument("--log", nargs="+")
     g.add_argument("--frames")
     ap.add_argument("--weights")
+    ap.add_argument("--labeller", help="with --frames: colour-index labeller from mexp.pseudolabel instead of --weights")
     ap.add_argument("--method", default="yolo", help="decisions to use from the logs: yolo or index")
     ap.add_argument("--policies", default="none,time:500,kofn:3/2,kofn:5/3,asym:3/2")
     ap.add_argument("--fps", type=float, default=15.0)
@@ -91,9 +99,9 @@ def main():
     if args.log:
         seqs = sequences_from_logs([p for f in args.log for p in glob.glob(f)], args.method)
     else:
-        if not args.weights:
-            sys.exit("--frames needs --weights")
-        seqs = sequences_from_frames(args.frames, args.weights, args.fps)
+        if not (args.weights or args.labeller):
+            sys.exit("--frames needs --weights or --labeller")
+        seqs = sequences_from_frames(args.frames, args.weights, args.fps, args.labeller)
 
     gtm = None
     if args.gt_metrics:

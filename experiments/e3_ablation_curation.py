@@ -140,14 +140,18 @@ def main():
         for frac in [float(f) for f in args.fractions.split(",")]:
             name = f"{args.strategy}_f{frac:g}_s{seed}"
             dst = Path(args.work) / name
+            done = Path(args.work) / f"{name}.done.json"
+            if done.exists():  # finished in an earlier, interrupted invocation
+                results.append(json.loads(done.read_text()))
+                print(f"[{name}] already done, skipped")
+                continue
             counts = build_set(pseudo, curated, assign, frac, args.strategy, seed, dst, scores)
             print(f"[{name}] {counts}")
             row = {"strategy": args.strategy, "fraction": frac, "seed": seed,
                    "train_counts": json.dumps(counts["train"])}
             if not args.dry_run:
                 from mexp.models import Predictor
-                from mexp.train import train_yolo
-                from mexp.train import load_cfg
+                from mexp.train import load_cfg, train_yolo
                 cfg = load_cfg(epochs=args.epochs, patience=args.patience, batch=args.batch)
                 best = train_yolo(dst, Path(args.work) / "runs", name, model=args.model, cfg=cfg, seed=seed,
                                   device=args.device)
@@ -155,8 +159,9 @@ def main():
                 if gt:
                     pred, _ = Predictor(best).predict([r["path"] for r in gt])
                     row.update({k: v for k, v in summary([r["label"] for r in gt], pred).items()})
+                done.write_text(json.dumps(row))
             results.append(row)
-            write_csv(out / f"runs_{args.strategy}.csv", results)
+            write_csv(out / f"runs_{args.strategy}.csv", results, list(dict.fromkeys(k for r in results for k in r)))
 
     if gt and not args.dry_run:
         agg = []

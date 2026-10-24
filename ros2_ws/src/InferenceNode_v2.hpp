@@ -29,7 +29,8 @@ private:
 
     //To save the received batch with all the information (timestamp, camera_Id, coding)
     //std::map<rclcpp::Time, std::vector<std::pair<std::string, cv::Mat>>> m_batchCollector;
-    size_t m_expectedBatchSize = 1;
+    // Max batch the engine accepts (one image per camera); parameter "max_batch_size"
+    int m_expectedBatchSize = 5;
 
     //Publisher
 

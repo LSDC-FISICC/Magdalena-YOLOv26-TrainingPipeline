@@ -95,27 +95,32 @@ def get_label(img_path, exg_thresh=0.02, exgr_thresh=0.0, ratio_min=0.0005, hsv_
     return "plant" if max_area_ratio >= ratio_min else "no_plant"
 
 
-source = Path("imagenes_labelbox")
-print(source.exists())
-images = sorted(source.glob("*.png"))
-print(len(images))
+def main():
+    source = Path("imagenes_labelbox")
+    print(source.exists())
+    images = sorted(source.glob("*.png"))
+    print(len(images))
 
-output = Path("roboflow_upload_exg_hsv_lab_v3-3")
-(output / "plant").mkdir(parents=True, exist_ok=True)
-(output / "no_plant").mkdir(parents=True, exist_ok=True)
+    output = Path("roboflow_upload_exg_hsv_lab_v3-3")
+    (output / "plant").mkdir(parents=True, exist_ok=True)
+    (output / "no_plant").mkdir(parents=True, exist_ok=True)
 
-plant_count    = 0
-no_plant_count = 0
+    plant_count    = 0
+    no_plant_count = 0
 
-for img_path in images:
-    label = get_label(img_path)
-    shutil.copy(img_path, output / label / img_path.name)
-    if label == "plant":
-        plant_count += 1
-    else:
-        no_plant_count += 1
+    for img_path in images:
+        label = get_label(img_path)
+        shutil.copy(img_path, output / label / img_path.name)
+        if label == "plant":
+            plant_count += 1
+        else:
+            no_plant_count += 1
 
-print(f"plant:    {plant_count}")
-print(f"no_plant: {no_plant_count}")
-print(f"Total:    {len(images)}")
-print(f"\nFolder ready: roboflow_upload_exg_hsv_lab/")
+    print(f"plant:    {plant_count}")
+    print(f"no_plant: {no_plant_count}")
+    print(f"Total:    {len(images)}")
+    print(f"\nFolder ready: roboflow_upload_exg_hsv_lab/")
+
+
+if __name__ == "__main__":
+    main()

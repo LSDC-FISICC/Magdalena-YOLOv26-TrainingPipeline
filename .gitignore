@@ -12,3 +12,11 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+
+# Experiment outputs (unpublished results, GT labels, materialised datasets)
+experiments/results/
+experiments/work/
+experiments/gt*/
+roboflow/
+*_block/
+paper/

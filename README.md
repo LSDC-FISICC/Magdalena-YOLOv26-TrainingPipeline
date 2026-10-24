@@ -399,6 +399,14 @@ Key factors behind these estimates:
 
 ---
 
+## Experiments for the publication
+
+`experiments/` contains the scripts for every experiment of the manuscript
+(independent ground truth, classifier vs. colour indices, curation ablation,
+labelling-variant and architecture comparison, Jetson latency, camera-to-valve
+latency, vinasse saving, field comparison with the index/NDVI pipeline). See
+[experiments/README.md](experiments/README.md).
+
 ## References
 
 - Dataset: LSDC-FISICC, Universidad Galileo — Smart Fertilization, Ingenio Magdalena

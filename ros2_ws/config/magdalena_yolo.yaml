@@ -1,0 +1,26 @@
+# Parameters for the YOLO perception graph (cameraNode + inference_node).
+#   ros2 run run_model_cpp_node cameraNode --ros-args --params-file ros2_ws/config/magdalena_yolo.yaml
+#   ros2 run run_model_cpp_node inference_node --ros-args --params-file ros2_ws/config/magdalena_yolo.yaml
+# Camera i of camera_topics drives /threshold<i+1> (coil i-1) through tools/valve_bridge.py.
+camera_process_node:
+  ros__parameters:
+    # Magdalena-Camera topics (/camera_<last IP octet>/color/image_raw). Only camera_55 and
+    # camera_56 are in Magdalena-Camera's cameras.yaml today: confirm the other three names.
+    camera_topics:
+      - /camera_55/color/image_raw
+      - /camera_56/color/image_raw
+      - /camera_57/color/image_raw
+      - /camera_58/color/image_raw
+      - /camera_59/color/image_raw
+    rate_hz: 15.0
+    # Crop applied before stretching to 320x96. Must reproduce the crop of the training
+    # frames; -1 keeps the centred 320x96 window.
+    roi_x: -1
+    roi_y: -1
+    roi_w: -1
+    roi_h: -1
+
+Yolo_InferenceNode_v2:
+  ros__parameters:
+    engine_path: best.engine
+    max_batch_size: 5

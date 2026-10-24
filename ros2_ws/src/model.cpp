@@ -1,10 +1,6 @@
 # include "model.hpp"
 
 model::model(const std::string& model_path, int batch_size) : m_maxBatchSize(batch_size) {
-    //pour debug visuel
-    cv::namedWindow("Debug Preprocess", cv::WINDOW_AUTOSIZE);
-    cv::namedWindow("Debug Preprocess2", cv::WINDOW_AUTOSIZE);
-
     std::vector<char> engineData = loadEnginePath(model_path);
 
     // 2. Initialisation des composants d'inférence TensorRT
@@ -126,16 +122,11 @@ void model::preprocessImage(const cv::Mat& img, int batchIdx){
     int height = img.rows;
     int weights = img.cols;
     int x_start = weights/2 - 160;
-    int x_end = weights/2 +160;
     int y_start = height/2 -48;
-    int y_end = height/2 +48;
-    cv::Rect rectangle(x_start, y_start, x_end, y_end);
+    // cv::Rect takes (x, y, width, height)
+    cv::Rect rectangle(x_start, y_start, 320, 96);
 
     cv::Mat img_rect = img(rectangle);
-
-    //pour le debug visuel
-    cv::imshow("Debug Preprocess", img_rect);
-    cv::waitKey(1);
 
     cv::Mat resized;
     cv::resize(img_rect, resized, cv::Size(320, 96));
@@ -222,9 +213,6 @@ std::vector<InferenceResult> model::analyzeBatch_preprocessed(const std::vector<
 
     // 1. Prétraitement séquentiel de chaque image reçue dans le vecteur
     for (int i = 0; i < currentBatchSize; ++i) {
-            cv::imshow("Debug Preprocess", images[i]);
-            cv::waitKey(1);
-
             std::vector<cv::Mat> channels(3);
             cv::split(images[i], channels); 
 

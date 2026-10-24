@@ -12,29 +12,34 @@ def get_label(img_path, threshold=0.001):
     ratio = np.count_nonzero(mask) / mask.size
     return "plant" if ratio >= threshold else "no_plant"
 
-source = Path("imagenes_labelbox")
-images = sorted(source.glob("*.png"))
+def main():
+    source = Path("imagenes_labelbox")
+    images = sorted(source.glob("*.png"))
 
-# Roboflow classification expects a folder structure:
-# upload/plant/img1.png
-# upload/no_plant/img2.png
+    # Roboflow classification expects a folder structure:
+    # upload/plant/img1.png
+    # upload/no_plant/img2.png
 
-output = Path("roboflow_upload")
-(output / "plant").mkdir(parents=True, exist_ok=True)
-(output / "no_plant").mkdir(parents=True, exist_ok=True)
+    output = Path("roboflow_upload")
+    (output / "plant").mkdir(parents=True, exist_ok=True)
+    (output / "no_plant").mkdir(parents=True, exist_ok=True)
 
-plant_count    = 0
-no_plant_count = 0
+    plant_count    = 0
+    no_plant_count = 0
 
-for img_path in images:
-    label = get_label(img_path)
-    shutil.copy(img_path, output / label / img_path.name)
-    if label == "plant":
-        plant_count += 1
-    else:
-        no_plant_count += 1
+    for img_path in images:
+        label = get_label(img_path)
+        shutil.copy(img_path, output / label / img_path.name)
+        if label == "plant":
+            plant_count += 1
+        else:
+            no_plant_count += 1
 
-print(f"plant:    {plant_count}")
-print(f"no_plant: {no_plant_count}")
-print(f"Total:    {len(images)}")
-print(f"\nFolder ready: roboflow_upload/")
+    print(f"plant:    {plant_count}")
+    print(f"no_plant: {no_plant_count}")
+    print(f"Total:    {len(images)}")
+    print(f"\nFolder ready: roboflow_upload/")
+
+
+if __name__ == "__main__":
+    main()

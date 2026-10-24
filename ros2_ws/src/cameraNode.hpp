@@ -30,8 +30,12 @@ class cameraNode : public rclcpp::Node {
     //function to process the images and publish them
     void timerCallback();
 
-    //List of camera Topics for the subscription
+    //List of camera Topics for the subscription (parameter "camera_topics")
     std::vector<std::string> m_cameraTopics;
+
+    //Crop window in the source frame, resized to 320x96 (parameters roi_x/roi_y/roi_w/roi_h).
+    //roi_w/roi_h <= 0 keeps the default centred 320x96 crop.
+    int m_roiX, m_roiY, m_roiW, m_roiH;
 
     //subscription
     std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> m_subscriptions;

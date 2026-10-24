@@ -96,7 +96,7 @@ target_link_libraries(inference_node PRIVATE
 
 target_compile_options(inference_node PRIVATE -Wall -Wextra)
 
-install(TARGETS inference_node
+install(TARGETS inference_node cameraNode
     DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -1,0 +1,14 @@
+# Shared hyper-parameters for every training run in the paper (ablation and
+# architecture comparison). Values reproduce the deployed model
+# runs/classify/magdalena/plant_cls_v4/args.yaml (ultralytics_yolov26_train_v2.py
+# currently holds different values). label_smoothing and crop_fraction are not
+# accepted by Ultralytics 8.4 and are therefore not listed.
+epochs: 30
+patience: 5
+batch: 64            # RTX 3070 8 GB
+optimizer: MuSGD
+lr0: 0.0005
+weight_decay: 0.04
+dropout: 0.1
+cos_lr: true
+workers: 4

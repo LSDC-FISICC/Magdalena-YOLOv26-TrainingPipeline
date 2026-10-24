@@ -7,6 +7,8 @@ InferenceNode_v2::InferenceNode_v2() : Node("Yolo_InferenceNode_v2"){
     //Engine_path definition
     this->declare_parameter<std::string>("engine_path", "../../src/best.engine");
     std::string enginePath = this->get_parameter("engine_path").as_string();
+    // Must not exceed the max shape the engine was built with (convert2engine4jetson_v2.py: 5)
+    m_expectedBatchSize = this->declare_parameter<int>("max_batch_size", 5);
 
 
     // Initialisation of the TensoRT model
@@ -33,17 +35,22 @@ InferenceNode_v2::InferenceNode_v2() : Node("Yolo_InferenceNode_v2"){
 
 //Function to infer the received batch from camera/preprocessed_frames
 void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg){
+    const int64_t t_received = this->get_clock()->now().nanoseconds();
     // Extract timestamp and camera_id
     rclcpp::Time msg_time = msg->header.stamp;
     std::string camera_name = msg->header.frame_id; 
 
-    //split camera_name to extract each camera_id
+    //split camera_name to extract each camera_id ("topic@capture_stamp_ns" since cameraNode
+    //propagates capture stamps; a plain "topic" is still accepted)
     std::vector<std::string> batch_camera_name;
+    std::vector<std::string> batch_capture_ns;
     std::stringstream ss(camera_name);
     std::string item;
     while(std::getline(ss, item, ',')){
         if(!item.empty()){
-            batch_camera_name.push_back(item);
+            size_t at = item.find('@');
+            batch_camera_name.push_back(item.substr(0, at));
+            batch_capture_ns.push_back(at == std::string::npos ? "" : item.substr(at + 1));
         }
     }
     if(batch_camera_name.empty()){
@@ -84,6 +91,7 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
     std::string classe_name;
     try{
         std::vector<InferenceResult> results = m_model->analyzeBatch_preprocessed(batch_images);
+        const int64_t t_infer_done = this->get_clock()->now().nanoseconds();
 
         int i = 0;
         // Global status with every keys/values
@@ -114,10 +122,20 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
             }
 
             array_container.values.push_back(state_msg);
+
+            // Timing and confidence for the latency decomposition (experiments/e7_e2e_latency.py)
+            auto kv = [](const std::string& k, const std::string& v) {
+                diagnostic_msgs::msg::KeyValue m; m.key = k; m.value = v; return m;
+            };
+            array_container.values.push_back(kv("confidence", std::to_string(results[i].confidence)));
+            array_container.values.push_back(kv("t_capture_ns", batch_capture_ns[i]));
+            array_container.values.push_back(kv("t_preprocessed_ns", std::to_string(msg_time.nanoseconds())));
+            array_container.values.push_back(kv("t_received_ns", std::to_string(t_received)));
+            array_container.values.push_back(kv("t_infer_done_ns", std::to_string(t_infer_done)));
             batch_status_msg.status.push_back(array_container);
             
 
-            RCLCPP_INFO(this->get_logger(), "Topic: %s -> Pred: %d , %s,  (Conf: %.2f)", 
+            RCLCPP_DEBUG(this->get_logger(), "Topic: %s -> Pred: %d , %s,  (Conf: %.2f)", 
                     camera_name.c_str(), results[i].predictedClass, classe_name.c_str(), results[i].confidence);
             }
 

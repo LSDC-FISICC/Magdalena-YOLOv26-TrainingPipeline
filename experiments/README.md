@@ -93,6 +93,37 @@ python experiments/e9_field_ab.py --gt experiments/gt_field/gt.csv --log logs/de
 python experiments/e10_paper_macros.py --model yolo26n_curated --out paper/results_macros.tex
 ```
 
+## GPU workstation (DGX Spark or RTX laptop): E3–E5 with three seeds
+
+`run_gpu_suite.py` runs the trainings of E3, E4 and E5 with seeds 0, 1 and 2 and the full
+protocol of `configs/train.yaml`, resumable and several at a time. All runs compared in the
+paper must come from the same machine.
+
+```bash
+# DGX Spark (ARM64 + Blackwell): use NVIDIA's PyTorch container, then
+pip install ultralytics==8.4.184 roboflow
+export ROBOFLOW_API_KEY=...                       # downloads the 4 variants not in git
+python experiments/run_gpu_suite.py prep --pseudo-csv e3_pseudo_labels.csv
+python experiments/run_gpu_suite.py smoke         # 1 epoch YOLO26n + MobileNetV3: GPU check
+python experiments/run_gpu_suite.py run --jobs 3  # --jobs 1 on a laptop
+python experiments/run_gpu_suite.py summary       # mean +- std per configuration
+# once the human GT exists (gt.csv with paths valid on this machine), without retraining:
+python experiments/run_gpu_suite.py evaluate --gt gt.csv --tag humangt
+```
+
+`e3_pseudo_labels.csv` holds the uncurated cascade label of each frame (computed on the
+original PNG frames); it is distributed with the data, not in git.
+
+## Jetson Orin Nano (reComputer J3011): E6
+
+```bash
+bash experiments/jetson_e6.sh      # builds FP16/FP32 engines of YOLO26n-cls on the device and times batch 1-5
+```
+
+The ONNX it compiles (`runs/classify/magdalena/plant_cls_n_blocksplit_cpu/weights/best.onnx`,
+dynamic batch, 96×320) is the YOLO26n-cls model trained on the leak-free block split; latency
+does not depend on the weights, so it stands in for the final GPU-trained model.
+
 ## Field protocol
 
 1. Launch Magdalena-Camera, `cameraNode` and `inference_node` with

@@ -69,6 +69,8 @@ def train(arch, data, out_dir, epochs=30, patience=5, batch=64, lr=1e-3, weight_
     """No online augmentation (Roboflow already augmented the training split), cosine LR,
     early stopping on validation accuracy, same as the YOLO protocol."""
     torch.manual_seed(seed)
+    if device is not None and str(device).isdigit():  # Ultralytics-style GPU index
+        device = f"cuda:{device}"
     device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     tr = DataLoader(_FolderSet(data, "train"), batch, shuffle=True, num_workers=workers)

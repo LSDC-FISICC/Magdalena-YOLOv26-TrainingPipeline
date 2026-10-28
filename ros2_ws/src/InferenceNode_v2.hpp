@@ -41,6 +41,9 @@ private:
     std::map<std::string, std::deque<float>> m_blurHistory;
     std::map<std::string, bool> m_onFallback;
 
+    // p(plant) at or above this threshold opens the valve (parameter "plant_threshold", 0.5 = argmax)
+    double m_plantThreshold = 0.5;
+
     // Subcription
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr m_sharedImg;
 

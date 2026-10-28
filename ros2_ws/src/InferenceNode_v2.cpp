@@ -20,6 +20,10 @@ InferenceNode_v2::InferenceNode_v2() : Node("Yolo_InferenceNode_v2"){
         throw e;
     }
 
+    // A threshold below 0.5 trades a little saving for less cane left without vinasse
+    m_plantThreshold = this->declare_parameter<double>("plant_threshold", 0.5);
+    RCLCPP_INFO(this->get_logger(), "plant_threshold %.2f", m_plantThreshold);
+
     // Optional fallback engine for blurred passes (night, long exposure); see InferenceNode_v2.hpp
     std::string fallbackPath = this->declare_parameter<std::string>("fallback_engine_path", "");
     // 0.561: Otsu threshold of blurRatio() on unlabelled day, blurred and night 320x94 crops
@@ -149,6 +153,9 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
                 m_onFallback[camera_name] = useFallback;
             }
             const InferenceResult& chosen = useFallback ? fallback[i] : results[i];
+            // two-class softmax: p(plant) from the winning class and its probability
+            auto pPlant = [](const InferenceResult& r) { return r.predictedClass == 1 ? r.confidence : 1.0f - r.confidence; };
+            const bool plant = pPlant(chosen) >= m_plantThreshold;
 
             diagnostic_msgs::msg::KeyValue state_msg;
             state_msg.key = "plant_detected";
@@ -158,10 +165,10 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
             array_container.name = camera_name ; 
             array_container.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
 
-            if(chosen.predictedClass == 1){
+            if(plant){
                 classe_name = "plant";
                 state_msg.value = "true";
-            }else if(chosen.predictedClass == 0){
+            }else{
                 classe_name = "no_plant";
                 state_msg.value = "false";
             }
@@ -173,12 +180,13 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
                 diagnostic_msgs::msg::KeyValue m; m.key = k; m.value = v; return m;
             };
             array_container.values.push_back(kv("confidence", std::to_string(chosen.confidence)));
+            array_container.values.push_back(kv("p_plant", std::to_string(pPlant(chosen))));
             array_container.values.push_back(kv("blur_ratio", std::to_string(ratio)));
             array_container.values.push_back(kv("blur_median", std::to_string(blurMedian)));
             if (m_fallback) {
                 array_container.values.push_back(kv("model", useFallback ? "fallback" : "main"));
-                array_container.values.push_back(kv("plant_main", results[i].predictedClass == 1 ? "true" : "false"));
-                array_container.values.push_back(kv("plant_fallback", fallback[i].predictedClass == 1 ? "true" : "false"));
+                array_container.values.push_back(kv("plant_main", pPlant(results[i]) >= m_plantThreshold ? "true" : "false"));
+                array_container.values.push_back(kv("plant_fallback", pPlant(fallback[i]) >= m_plantThreshold ? "true" : "false"));
             }
             array_container.values.push_back(kv("t_capture_ns", batch_capture_ns[i]));
             array_container.values.push_back(kv("t_preprocessed_ns", std::to_string(msg_time.nanoseconds())));
@@ -188,7 +196,7 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
             
 
             RCLCPP_DEBUG(this->get_logger(), "Topic: %s -> Pred: %d , %s,  (Conf: %.2f)", 
-                    camera_name.c_str(), chosen.predictedClass, classe_name.c_str(), chosen.confidence);
+                    camera_name.c_str(), plant ? 1 : 0, classe_name.c_str(), chosen.confidence);
             }
 
         

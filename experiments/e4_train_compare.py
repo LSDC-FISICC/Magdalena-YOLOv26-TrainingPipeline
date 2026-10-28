@@ -51,6 +51,8 @@ def main():
     ap.add_argument("--patience", type=int)
     ap.add_argument("--batch", type=int)
     ap.add_argument("--device")
+    ap.add_argument("--aug", action="store_true",
+                    help="YOLO only: online motion-blur and colour augmentation (run names get _aug)")
     ap.add_argument("--work", default="experiments/work/e4")
     ap.add_argument("--out", default="experiments/results/e4_compare")
     args = ap.parse_args()
@@ -71,7 +73,7 @@ def main():
         counts = {sp: len(list_folder_dataset(ddir, sp)) for sp in ("train", "valid")}
         for arch in archs:
             for seed in [int(s) for s in args.seeds.split(",")]:
-                aname = Path(arch).stem
+                aname = Path(arch).stem + ("_aug" if args.aug else "")
                 run = f"{dname}__{aname}__s{seed}"
                 done = Path(args.work) / f"{run}.done.json"
                 if done.exists():  # resume: runs are long on CPU
@@ -88,7 +90,7 @@ def main():
                         tv_models.export_onnx(best, str(best.with_suffix(".onnx")))
                 else:
                     best = train_yolo(ddir, Path(args.work) / "runs", run, model=arch, cfg=cfg, seed=seed,
-                                      device=args.device)
+                                      device=args.device, aug=args.aug)
                     from ultralytics import YOLO
                     y = YOLO(str(best))
                     params, gflops = tv_models.complexity(y.model)

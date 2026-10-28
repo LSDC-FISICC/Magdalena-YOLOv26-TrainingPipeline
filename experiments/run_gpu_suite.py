@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E3/E4/E5 with three seeds and the full protocol on a GPU workstation (DGX Spark or an RTX laptop).
+"""E3/E4/E5/E11 with three seeds and the full protocol on a GPU workstation (DGX Spark or an RTX laptop).
 
 Five steps, each resumable (a finished training writes <run>.done.json and is not repeated):
 
@@ -8,7 +8,8 @@ Five steps, each resumable (a finished training writes <run>.done.json and is no
            with the temporal block split, and write the provisional GT (block-test frames
            with the curated labels) used when no human GT is given;
   smoke    one-epoch YOLO26n-cls and MobileNetV3 runs: checks that the GPU is used;
-  run      the trainings, --jobs at a time (E3: one job per seed; E4/E5: one per model and seed);
+  run      the trainings, --jobs at a time (E3: one job per seed; E4/E5/E11: one per model and seed;
+           E11 = YOLO26n-cls with online motion-blur and colour augmentation, run with --only e11);
   summary  mean +- std over seeds for every configuration -> experiments/results/gpu/<tag>/summary.csv;
   evaluate re-scores every trained model on another GT (the human one) without retraining.
 
@@ -60,6 +61,7 @@ LOCAL = {"curated": REPO_ROOT / "dataset2", "manual_v1": REPO_ROOT / "dataset"}
 E4_DATASETS = ["hsv_v1", "exg_v1", "manual_v1", "exg_hsv_v2", "cascade_v3"]  # + curated, shared with E5
 E5_ARCHS = ["yolo26n-cls.pt", "yolo26s-cls.pt", "mobilenet_v3_small", "efficientnet_b0", "resnet18"]
 E3_FRACTIONS = "0,10,25,50,100"
+E11_DATASETS = ["curated", "cascade_v3"]
 
 
 def source_dir(name):
@@ -106,7 +108,7 @@ def prep(args):
 
 
 def e45_cmd(exp, dataset, arch, seed, gt, tag, device, extra=()):
-    aname = Path(arch).stem
+    aname = Path(arch).stem + ("_aug" if "--aug" in extra else "")
     return [PY, str(EXP / "e4_train_compare.py"), "--dataset", f"{dataset}={split_dir(dataset)}",
             "--arch", arch, "--seeds", str(seed), "--gt", str(gt), "--device", device,
             "--work", str(WORK / exp), "--out", str(RES / tag / exp / f"{dataset}__{aname}__s{seed}"), *extra]
@@ -130,6 +132,11 @@ def jobs(args, gt):
         for d in E4_DATASETS:
             for s in SEEDS:
                 out.append(("e4", f"{d}_s{s}", e45_cmd("e4", d, "yolo26n-cls.pt", s, gt, args.tag, args.device)))
+    if "e11" in args.only:  # online blur/colour augmentation, curated and uncurated cascade labels
+        for d in E11_DATASETS:
+            for s in SEEDS:
+                out.append(("e11", f"{d}_s{s}",
+                            e45_cmd("e11", d, "yolo26n-cls.pt", s, gt, args.tag, args.device, ["--aug", "--export-onnx"])))
     return out
 
 
@@ -177,9 +184,9 @@ def smoke(args):
 
 
 def done_records():
-    """[(experiment, group_a, group_b, record)] for every finished E3/E4/E5 training."""
+    """[(experiment, group_a, group_b, record)] for every finished E3/E4/E5/E11 training."""
     out = []
-    for exp in ("e3", "e4", "e5"):
+    for exp in ("e3", "e4", "e5", "e11"):
         for f in sorted((WORK / exp).glob("*.done.json")):
             r = json.loads(f.read_text())
             if exp == "e3":

@@ -22,5 +22,13 @@ camera_process_node:
 
 Yolo_InferenceNode_v2:
   ros__parameters:
-    engine_path: best.engine
+    engine_path: best.engine          # plant_main.engine: E11 model (curated labels, blur/colour augmentation)
     max_batch_size: 5
+    # Pass-condition switch: while the median blur ratio of a camera's last blur_window frames
+    # is below blur_threshold (blurred pass: night, long exposure), that camera is decided by
+    # the fallback engine (plant_fallback.engine, trained on ExG labels). "" disables it.
+    # blur_threshold was set on 320x94 crops cut without resizing: keep roi_w/roi_h at the
+    # default 320x96 window, a resized crop lowers the ratio.
+    fallback_engine_path: ""
+    blur_threshold: 0.561
+    blur_window: 30

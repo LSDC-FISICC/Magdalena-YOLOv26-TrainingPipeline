@@ -11,7 +11,10 @@ Five steps, each resumable (a finished training writes <run>.done.json and is no
   run      the trainings, --jobs at a time (E3: one job per seed; E4/E5/E11: one per model and seed;
            E11 = YOLO26n-cls with online motion-blur and colour augmentation, run with --only e11);
   summary  mean +- std over seeds for every configuration -> experiments/results/gpu/<tag>/summary.csv;
-  evaluate re-scores every trained model on another GT (the human one) without retraining.
+  evaluate re-scores every trained model on another GT (the human one) without retraining;
+  deploy   copies the deployed pair to experiments/work/gpu/deploy: plant_main.pt (E11, curated
+           labels, augmented) and plant_fallback.pt (E4, ExG labels), each the seed with the best
+           validation accuracy (never chosen on a GT), for convert2engine4jetson_v2.py.
 
 All comparisons of the paper must come from the same machine: do not mix GPUs.
 Hyper-parameters come from configs/train.yaml (30 epochs, patience 5, batch 64).
@@ -240,9 +243,44 @@ def evaluate(args):
     summarise(records, RES / args.tag / "summary.csv")
 
 
+# Deployed pair: main model, and the fallback used while a camera's pass is blurred
+# (InferenceNode_v2 fallback_engine_path / blur_threshold)
+DEPLOY = {"plant_main": ("e11", "curated__yolo26n-cls_aug"), "plant_fallback": ("e4", "exg_v1__yolo26n-cls")}
+
+
+def best_val_seed(exp, prefix):
+    """(seed, val_top1, weights) of the seed of exp/prefix with the best validation top-1 accuracy."""
+    best = None
+    for s in SEEDS:
+        res = WORK / exp / "runs" / f"{prefix}__s{s}" / "results.csv"
+        if not res.exists():
+            continue
+        rows = [{k.strip(): v for k, v in r.items()} for r in csv.DictReader(open(res))]
+        acc = max(float(r["metrics/accuracy_top1"]) for r in rows)
+        if best is None or acc > best[1]:
+            best = (s, acc, res.parent / "weights" / "best.pt")
+    if best is None:
+        sys.exit(f"no finished run for {exp}/{prefix}: run --only {exp} first")
+    return best
+
+
+def deploy(args):
+    out = WORK / "deploy"
+    out.mkdir(parents=True, exist_ok=True)
+    manifest = {}
+    for name, (exp, prefix) in DEPLOY.items():
+        seed, acc, weights = best_val_seed(exp, prefix)
+        dst = out / f"{name}.pt"
+        dst.write_bytes(weights.read_bytes())
+        manifest[name] = {"experiment": exp, "run": prefix, "seed": seed, "val_top1": acc, "source": str(weights)}
+        print(f"{name}: {exp}/{prefix} seed {seed} (val top-1 {100 * acc:.1f}) -> {dst}")
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
+    print(f"-> {out}. On the Jetson: python convert2engine4jetson_v2.py --model <file>.pt for each file")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("step", choices=["prep", "smoke", "run", "summary", "evaluate"])
+    ap.add_argument("step", choices=["prep", "smoke", "run", "summary", "evaluate", "deploy"])
     ap.add_argument("--pseudo-csv", help="prep: frame,label CSV of the uncurated cascade (E3)")
     ap.add_argument("--gt", help="run/evaluate: GT csv (run defaults to the provisional block-test GT)")
     ap.add_argument("--tag", default="provisional", help="results sub-folder, e.g. humangt")
@@ -250,7 +288,8 @@ def main():
     ap.add_argument("--only", default="e3,e4,e5")
     ap.add_argument("--device", default="0")
     args = ap.parse_args()
-    {"prep": prep, "smoke": smoke, "run": run, "summary": summary, "evaluate": evaluate}[args.step](args)
+    {"prep": prep, "smoke": smoke, "run": run, "summary": summary, "evaluate": evaluate,
+     "deploy": deploy}[args.step](args)
 
 
 if __name__ == "__main__":

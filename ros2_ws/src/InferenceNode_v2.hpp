@@ -11,6 +11,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <deque>
 #include <mutex>
 #include <memory>
 #include "model.hpp"
@@ -28,6 +29,17 @@ private:
 
     // Class model
     std::unique_ptr<model> m_model;
+
+    // Pass-condition switch. A second engine (parameter "fallback_engine_path", e.g. the model
+    // trained on ExG labels) decides for a camera while its pass is blurred: the median, over
+    // the last "blur_window" frames of that camera, of blurRatio() is below "blur_threshold".
+    // Empty fallback_engine_path disables the switch (main engine only, as before).
+    static float blurRatio(const cv::Mat& img);
+    std::unique_ptr<model> m_fallback;
+    double m_blurThreshold = 0.561;
+    size_t m_blurWindow = 30;
+    std::map<std::string, std::deque<float>> m_blurHistory;
+    std::map<std::string, bool> m_onFallback;
 
     // Subcription
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr m_sharedImg;

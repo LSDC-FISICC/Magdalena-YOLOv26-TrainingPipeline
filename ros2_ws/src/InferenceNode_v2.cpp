@@ -20,6 +20,17 @@ InferenceNode_v2::InferenceNode_v2() : Node("Yolo_InferenceNode_v2"){
         throw e;
     }
 
+    // Optional fallback engine for blurred passes (night, long exposure); see InferenceNode_v2.hpp
+    std::string fallbackPath = this->declare_parameter<std::string>("fallback_engine_path", "");
+    // 0.561: Otsu threshold of blurRatio() on unlabelled day, blurred and night 320x94 crops
+    m_blurThreshold = this->declare_parameter<double>("blur_threshold", 0.561);
+    m_blurWindow = static_cast<size_t>(std::max<int64_t>(1, this->declare_parameter<int64_t>("blur_window", 30)));
+    if (!fallbackPath.empty()) {
+        m_fallback = std::make_unique<model>(fallbackPath, m_expectedBatchSize);
+        RCLCPP_INFO(this->get_logger(), "Fallback model %s used while the median blur ratio of the last %zu frames < %.3f",
+                    fallbackPath.c_str(), m_blurWindow, m_blurThreshold);
+    }
+
     // Loading the subscription
     m_sharedImg = this->create_subscription<sensor_msgs::msg::Image>(
     "/camera/preprocessed_frames", 
@@ -30,6 +41,19 @@ InferenceNode_v2::InferenceNode_v2() : Node("Yolo_InferenceNode_v2"){
     //Publisher
     m_batchPlantPub = this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/detection/Trigger", 10);
 
+}
+
+
+// Blur along the direction of travel (vertical in the crop) removes vertical gradients only:
+// mean |dI/dy| / mean |dI/dx| of the grey crop, independent of brightness and contrast.
+// Same statistic as the offline analysis (Otsu threshold 0.561, about 0.8 on sharp day frames).
+float InferenceNode_v2::blurRatio(const cv::Mat& img){
+    cv::Mat f, gray;
+    img.convertTo(f, CV_32F);
+    cv::cvtColor(f, gray, cv::COLOR_BGR2GRAY);
+    const double dy = cv::mean(cv::abs(gray.rowRange(1, gray.rows) - gray.rowRange(0, gray.rows - 1)))[0];
+    const double dx = cv::mean(cv::abs(gray.colRange(1, gray.cols) - gray.colRange(0, gray.cols - 1)))[0];
+    return static_cast<float>(dy / std::max(dx, 1e-9));
 }
 
 
@@ -91,6 +115,10 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
     std::string classe_name;
     try{
         std::vector<InferenceResult> results = m_model->analyzeBatch_preprocessed(batch_images);
+        std::vector<InferenceResult> fallback;
+        if (m_fallback) {
+            fallback = m_fallback->analyzeBatch_preprocessed(batch_images);
+        }
         const int64_t t_infer_done = this->get_clock()->now().nanoseconds();
 
         int i = 0;
@@ -105,6 +133,23 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
 
 
             std::string camera_name = batch_camera_name[i];
+
+            // Blur of this camera's pass: median ratio over its last m_blurWindow frames
+            const float ratio = blurRatio(batch_images[i]);
+            auto& hist = m_blurHistory[camera_name];
+            hist.push_back(ratio);
+            while (hist.size() > m_blurWindow) hist.pop_front();
+            std::vector<float> sorted(hist.begin(), hist.end());
+            std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
+            const float blurMedian = sorted[sorted.size() / 2];
+            const bool useFallback = m_fallback && blurMedian < m_blurThreshold;
+            if (m_fallback && useFallback != m_onFallback[camera_name]) {
+                RCLCPP_INFO(this->get_logger(), "%s: %s model (median blur ratio %.3f)", camera_name.c_str(),
+                            useFallback ? "fallback" : "main", blurMedian);
+                m_onFallback[camera_name] = useFallback;
+            }
+            const InferenceResult& chosen = useFallback ? fallback[i] : results[i];
+
             diagnostic_msgs::msg::KeyValue state_msg;
             state_msg.key = "plant_detected";
 
@@ -113,10 +158,10 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
             array_container.name = camera_name ; 
             array_container.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
 
-            if(results[i].predictedClass == 1){
+            if(chosen.predictedClass == 1){
                 classe_name = "plant";
                 state_msg.value = "true";
-            }else if(results[i].predictedClass == 0){
+            }else if(chosen.predictedClass == 0){
                 classe_name = "no_plant";
                 state_msg.value = "false";
             }
@@ -127,7 +172,14 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
             auto kv = [](const std::string& k, const std::string& v) {
                 diagnostic_msgs::msg::KeyValue m; m.key = k; m.value = v; return m;
             };
-            array_container.values.push_back(kv("confidence", std::to_string(results[i].confidence)));
+            array_container.values.push_back(kv("confidence", std::to_string(chosen.confidence)));
+            array_container.values.push_back(kv("blur_ratio", std::to_string(ratio)));
+            array_container.values.push_back(kv("blur_median", std::to_string(blurMedian)));
+            if (m_fallback) {
+                array_container.values.push_back(kv("model", useFallback ? "fallback" : "main"));
+                array_container.values.push_back(kv("plant_main", results[i].predictedClass == 1 ? "true" : "false"));
+                array_container.values.push_back(kv("plant_fallback", fallback[i].predictedClass == 1 ? "true" : "false"));
+            }
             array_container.values.push_back(kv("t_capture_ns", batch_capture_ns[i]));
             array_container.values.push_back(kv("t_preprocessed_ns", std::to_string(msg_time.nanoseconds())));
             array_container.values.push_back(kv("t_received_ns", std::to_string(t_received)));
@@ -136,7 +188,7 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
             
 
             RCLCPP_DEBUG(this->get_logger(), "Topic: %s -> Pred: %d , %s,  (Conf: %.2f)", 
-                    camera_name.c_str(), results[i].predictedClass, classe_name.c_str(), results[i].confidence);
+                    camera_name.c_str(), chosen.predictedClass, classe_name.c_str(), chosen.confidence);
             }
 
         

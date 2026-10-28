@@ -14,7 +14,8 @@ Five steps, each resumable (a finished training writes <run>.done.json and is no
   evaluate re-scores every trained model on another GT (the human one) without retraining;
   deploy   copies the deployed pair to experiments/work/gpu/deploy: plant_main.pt (E11, curated
            labels, augmented) and plant_fallback.pt (E4, ExG labels), each the seed with the best
-           validation accuracy (never chosen on a GT), for convert2engine4jetson_v2.py.
+           validation accuracy (never chosen on a GT), for convert2engine4jetson_v2.py;
+           --main e12 uses the E12 model trained on every pseudo-labelled group instead.
 
 All comparisons of the paper must come from the same machine: do not mix GPUs.
 Hyper-parameters come from configs/train.yaml (30 epochs, patience 5, batch 64).
@@ -246,6 +247,8 @@ def evaluate(args):
 # Deployed pair: main model, and the fallback used while a camera's pass is blurred
 # (InferenceNode_v2 fallback_engine_path / blur_threshold)
 DEPLOY = {"plant_main": ("e11", "curated__yolo26n-cls_aug"), "plant_fallback": ("e4", "exg_v1__yolo26n-cls")}
+# --main e12: E12 trained on every pseudo-labelled group (e12_pseudo_finetune.py --fold ALL=...)
+MAIN_E12 = ("e12", "foldALL__yolo26n-cls_aug_pseudo")
 
 
 def best_val_seed(exp, prefix):
@@ -268,7 +271,8 @@ def deploy(args):
     out = WORK / "deploy"
     out.mkdir(parents=True, exist_ok=True)
     manifest = {}
-    for name, (exp, prefix) in DEPLOY.items():
+    pair = dict(DEPLOY, plant_main=MAIN_E12) if args.main == "e12" else DEPLOY
+    for name, (exp, prefix) in pair.items():
         seed, acc, weights = best_val_seed(exp, prefix)
         dst = out / f"{name}.pt"
         dst.write_bytes(weights.read_bytes())
@@ -287,6 +291,7 @@ def main():
     ap.add_argument("--jobs", type=int, default=1, help="trainings in parallel (3 on a DGX Spark)")
     ap.add_argument("--only", default="e3,e4,e5")
     ap.add_argument("--device", default="0")
+    ap.add_argument("--main", choices=["e11", "e12"], default="e11", help="deploy: model used as plant_main")
     args = ap.parse_args()
     {"prep": prep, "smoke": smoke, "run": run, "summary": summary, "evaluate": evaluate,
      "deploy": deploy}[args.step](args)

@@ -26,7 +26,9 @@ Example (groups and folds used for the paper):
       --gt day=experiments/gt_human/dia/gt.csv --gt session2=experiments/gt_human/sesion2/gt.csv \\
       --gt night=experiments/gt_human/noche/gt.csv --seeds 0,1,2 --device 0
 
-gt_folds.csv maps (domain, image_id) to the group of that GT image.
+gt_folds.csv maps (domain, image_id) to the group of that GT image. The deployed model is then
+trained on every group (--fold ALL=night_0515,night_0603,s2_a,s2_b); only the daylight GT, which
+no fold trains on, scores it, and run_gpu_suite.py deploy --main e12 picks its seed.
 """
 
 import argparse
@@ -118,6 +120,8 @@ def run(args):
             rec = {"fold": fold, "seed": seed, "weights": str(best), "pseudo": n, "preds": {}}
             for dom, gt in gts.items():
                 test = [r for r in gt if group_of.get((dom, r["image_id"])) not in train_groups]
+                if not test:  # e.g. the final model trained on every group
+                    continue
                 labels, _ = pred.predict([str(REPO_ROOT / r["path"]) if not Path(r["path"]).is_absolute()
                                           else r["path"] for r in test])
                 rec["preds"][dom] = {r["image_id"]: p for r, p in zip(test, labels)}
@@ -136,6 +140,8 @@ def run(args):
             for r in recs:
                 for iid, lab in r["preds"].get(dom, {}).items():
                     y.append(truth[iid]); p.append(lab)
+            if not y:
+                continue
             s = summary(y, p)
             row.update({f"{dom}_acc": round(s["accuracy"], 4), f"{dom}_recall": round(s["recall"], 4),
                         f"{dom}_spec": round(s["specificity"], 4), f"{dom}_n": len(y)})

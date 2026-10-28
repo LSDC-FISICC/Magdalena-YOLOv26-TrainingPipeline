@@ -21,3 +21,4 @@ roboflow/
 *_block/
 paper/
 runs/classify/experiments/
+experiments/e12_data/

@@ -2,10 +2,16 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+// cv_bridge.hpp exists from cv_bridge 3.3 (Iron); stock Humble (3.2.x) only ships cv_bridge.h
+#if __has_include(<cv_bridge/cv_bridge.hpp>)
 #include <cv_bridge/cv_bridge.hpp>
+#else
+#include <cv_bridge/cv_bridge.h>
+#endif
 #include <vector>
 #include <string>
 #include <map>
+#include <deque>
 #include <mutex>
 #include <memory>
 #include "model.hpp"
@@ -23,6 +29,20 @@ private:
 
     // Class model
     std::unique_ptr<model> m_model;
+
+    // Pass-condition switch. A second engine (parameter "fallback_engine_path", e.g. the model
+    // trained on ExG labels) decides for a camera while its pass is blurred: the median, over
+    // the last "blur_window" frames of that camera, of blurRatio() is below "blur_threshold".
+    // Empty fallback_engine_path disables the switch (main engine only, as before).
+    static float blurRatio(const cv::Mat& img);
+    std::unique_ptr<model> m_fallback;
+    double m_blurThreshold = 0.561;
+    size_t m_blurWindow = 30;
+    std::map<std::string, std::deque<float>> m_blurHistory;
+    std::map<std::string, bool> m_onFallback;
+
+    // p(plant) at or above this threshold opens the valve (parameter "plant_threshold", 0.5 = argmax)
+    double m_plantThreshold = 0.5;
 
     // Subcription
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr m_sharedImg;

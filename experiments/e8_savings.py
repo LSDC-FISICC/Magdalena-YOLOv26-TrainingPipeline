@@ -22,8 +22,9 @@ The % reduction does not depend on flow or speed; litres per hectare need
 Examples:
   python experiments/e8_savings.py --log logs/decisions_*.csv \
       --policies none,time:500,kofn:3/2,asym:3/2 --speed-kmh 6 \
-      --gt-metrics experiments/results/e2_gt/metrics.json --model-name yolo26s_curated
+      --gt-metrics experiments/results/e2_gt/metrics.json --model-name yolo26n_curated
   python experiments/e8_savings.py --frames recording_session_frames/ --weights best.pt
+  python experiments/e8_savings.py --frames recording_session_frames/ --labeller cascade_hsv_lab_exgr
 """
 
 import argparse
@@ -36,26 +37,43 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mexp import debounce  # noqa: E402
-from mexp.data import list_folder_dataset, read_csv, unique_sources, write_csv  # noqa: E402
+from mexp.data import IMG_EXT, frame_id, list_folder_dataset, read_csv, unique_sources, write_csv  # noqa: E402
 
 
-def sequences_from_logs(paths, method="yolo"):
-    """{(log, camera): [(t_seconds, raw_plant, label=None)]} for one perception method."""
+def sequences_from_logs(paths, method="yolo", second_threshold=0.5):
+    """{(log, camera): [(t_seconds, raw_plant, label=None)]} for one perception method. method
+    "second" replays the engine logged as p_fallback (only logged, not driving the valves) at
+    second_threshold."""
     seq = {}
     for f in paths:
         for r in read_csv(f):
-            if r.get("method", "yolo") != method:
+            if r.get("method", "yolo") != ("yolo" if method == "second" else method):
                 continue
+            if method == "second":
+                if not r.get("p_fallback"):
+                    continue
+                plant = float(r["p_fallback"]) >= second_threshold
+            else:
+                plant = r["raw"] == "1"
             t = int(r["t_capture_ns"] or r["t_logger_rx_ns"]) / 1e9
-            seq.setdefault((Path(f).stem, r["camera"]), []).append((t, r["raw"] == "1", None))
+            seq.setdefault((Path(f).stem, r["camera"]), []).append((t, plant, None))
     return {k: sorted(v) for k, v in seq.items()}
 
 
-def sequences_from_frames(folder, weights, fps):
-    from mexp.models import Predictor
-    rows = sorted((r for r in unique_sources(list_folder_dataset(folder)) if r["frame"] is not None),
-                  key=lambda r: r["frame"])
-    pred, _ = Predictor(weights).predict([r["path"] for r in rows])
+def sequences_from_frames(folder, weights, fps, labeller=None):
+    rows = unique_sources(list_folder_dataset(folder))
+    if not rows:  # plain folder of raw frames, no plant/no_plant sub-folders
+        rows = [{"path": str(p), "label": "", "frame": frame_id(p), "source": p.stem}
+                for p in Path(folder).iterdir() if p.suffix.lower() in IMG_EXT]
+    rows = sorted((r for r in rows if r["frame"] is not None), key=lambda r: r["frame"])
+    if labeller:  # colour-index baseline (HSV mask / cascade / CV-Pipeline ExG) instead of a model
+        from concurrent.futures import ProcessPoolExecutor
+        from mexp.pseudolabel import LABELERS
+        with ProcessPoolExecutor() as ex:
+            pred = list(ex.map(LABELERS[labeller], [r["path"] for r in rows], chunksize=64))
+    else:
+        from mexp.models import Predictor
+        pred, _ = Predictor(weights).predict([r["path"] for r in rows])
     labelled = all(r["label"] for r in rows)
     seq = [(r["frame"] / fps, p == "plant", (r["label"] == "plant") if labelled else None)
            for r, p in zip(rows, pred)]
@@ -73,7 +91,10 @@ def main():
     g.add_argument("--log", nargs="+")
     g.add_argument("--frames")
     ap.add_argument("--weights")
-    ap.add_argument("--method", default="yolo", help="decisions to use from the logs: yolo or index")
+    ap.add_argument("--labeller", help="with --frames: colour-index labeller from mexp.pseudolabel instead of --weights")
+    ap.add_argument("--method", default="yolo",
+                    help="decisions to use from the logs: yolo (drove the valves), second (p_fallback) or index")
+    ap.add_argument("--second-threshold", type=float, default=0.5, help="with --method second")
     ap.add_argument("--policies", default="none,time:500,kofn:3/2,kofn:5/3,asym:3/2")
     ap.add_argument("--fps", type=float, default=15.0)
     ap.add_argument("--valves-per-furrow", type=int, default=4)
@@ -86,11 +107,11 @@ def main():
     args = ap.parse_args()
 
     if args.log:
-        seqs = sequences_from_logs([p for f in args.log for p in glob.glob(f)], args.method)
+        seqs = sequences_from_logs([p for f in args.log for p in glob.glob(f)], args.method, args.second_threshold)
     else:
-        if not args.weights:
-            sys.exit("--frames needs --weights")
-        seqs = sequences_from_frames(args.frames, args.weights, args.fps)
+        if not (args.weights or args.labeller):
+            sys.exit("--frames needs --weights or --labeller")
+        seqs = sequences_from_frames(args.frames, args.weights, args.fps, args.labeller)
 
     gtm = None
     if args.gt_metrics:

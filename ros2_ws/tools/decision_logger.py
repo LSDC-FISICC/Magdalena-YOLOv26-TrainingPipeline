@@ -29,7 +29,8 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import Float32
 
 FIELDS = ["method", "camera", "index", "raw", "score", "confidence", "t_capture_ns", "t_preprocessed_ns",
-          "t_received_ns", "t_infer_done_ns", "t_logger_rx_ns"]
+          "t_received_ns", "t_infer_done_ns", "t_logger_rx_ns",
+          "blur_ratio", "blur_median", "model", "plant_main", "plant_fallback", "p_plant", "p_main", "p_fallback"]
 
 
 class DecisionLogger(Node):
@@ -65,7 +66,8 @@ class DecisionLogger(Node):
                 "raw": int(kv.get("plant_detected") == "true"), "confidence": kv.get("confidence", ""),
                 "t_capture_ns": kv.get("t_capture_ns", ""), "t_preprocessed_ns": kv.get("t_preprocessed_ns", ""),
                 "t_received_ns": kv.get("t_received_ns", ""), "t_infer_done_ns": kv.get("t_infer_done_ns", ""),
-                "t_logger_rx_ns": t_rx})
+                "t_logger_rx_ns": t_rx,
+                **{k: kv.get(k, "") for k in ("blur_ratio", "blur_median", "model", "plant_main", "plant_fallback", "p_plant", "p_main", "p_fallback")}})
         self.fh.flush()
 
     def cb_index(self, msg, i):

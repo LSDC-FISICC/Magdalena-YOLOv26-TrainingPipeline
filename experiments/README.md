@@ -14,7 +14,7 @@ macros for the placeholders of the abstract and introduction.
 | E2 | `e2_eval_gt.py` | *accuracy [XX %]*, *exceeded the colour index that supervised it by [XX] pp* | CPU/GPU | GT + trained weights |
 | E3 | `e3_ablation_curation.py` | *ablation over the curated fraction [0/10/50/100 %]* | GPU (RTX 3070) | pseudo-labelled **and** curated labelling of the same frames (matched by frame name, any split) |
 | E4 | `e4_roboflow_download.py`, `e4_train_compare.py` | *cascaded HSV, LAB and ExGR masks replace most manual labelling* (one model per Roboflow labelling variant) | GPU | the 10 Roboflow projects |
-| E5 | `e4_train_compare.py --arch …` | comparison with MobileNetV3 / EfficientNet-B0 / ResNet18 / YOLO26n | GPU | one dataset |
+| E5 | `e4_train_compare.py --arch …` | comparison of the deployed YOLO26n-cls with YOLO26s-cls / MobileNetV3 / EfficientNet-B0 / ResNet18 | GPU | one dataset |
 | E6 | `e6_benchmark_latency.py` | *throughput [XX] images per second*, inference latency, energy per image | Jetson Orin Nano | `.engine` files |
 | E7 | `e7_e2e_latency.py` | *camera-to-valve latency [XX ms]*, inter-camera skew, camera lead distance | Jetson + PLC | `decision_logger.py` logs, Modbus host |
 | E8 | `e8_savings.py` | *estimated [XX %] reduction in applied volume*, debounce trade-off | CPU | field logs or a contiguous recording |
@@ -48,7 +48,7 @@ macros for the placeholders of the abstract and introduction.
   scripts here predict on 320×96 stretched inputs (as Roboflow built the data
   and as the C++ node feeds TensorRT).
 * **FLOPs** are counted with `torch.utils.flop_counter` at 96×320
-  (YOLO26s-cls: 0.90 GFLOPs; Ultralytics prints 12.1 GFLOPs at 640×640).
+  (YOLO26n-cls: 0.24 GFLOPs, YOLO26s-cls: 0.90 GFLOPs; Ultralytics reports them at 640×640).
 
 ## Order of execution
 
@@ -69,7 +69,7 @@ python experiments/e1_agreement.py --manifest experiments/gt/manifest.csv \
 # 2-5. Training and evaluation (RTX 3070)
 python experiments/e4_train_compare.py --gt experiments/gt/gt.csv --block-split \
     --dataset cascade_curated=dataset2 --seeds 0,1,2 --export-onnx
-python experiments/e2_eval_gt.py --gt experiments/gt/gt.csv --model yolo26s_curated=<best.pt>
+python experiments/e2_eval_gt.py --gt experiments/gt/gt.csv --model yolo26n_curated=<best.pt>
 python experiments/e3_ablation_curation.py --pseudo roboflow/sugarcane_exg_hsv_lab_v3 \
     --curated roboflow/sugarcane_exg_hsv_lab_v3-2-100 \
     --gt experiments/gt/gt.csv --fractions 0,10,25,50,100 --seeds 0,1,2
@@ -79,19 +79,50 @@ python experiments/e4_train_compare.py --gt experiments/gt/gt.csv --dataset cura
     --arch yolo26n-cls.pt --arch yolo26s-cls.pt --arch mobilenet_v3_small --arch efficientnet_b0 --arch resnet18 --export-onnx
 
 # 6. Jetson (sudo jetson_clocks; build every engine with trtexec, batch 1..5)
-python experiments/e6_benchmark_latency.py --engine best_fp16.engine --tag yolo26s_fp16
+python experiments/e6_benchmark_latency.py --engine best_fp16.engine --tag yolo26n_fp16
 
 # 7-9. Field passes (see "Field protocol")
 python experiments/e7_e2e_latency.py --log logs/decisions_*.csv --modbus-host 192.168.11.60 \
     --valve-open-ms <measured> --valve-close-ms <measured> --speed-kmh <v>
 python experiments/e8_savings.py --log logs/decisions_*.csv --speed-kmh <v> --flow-lpm <q> \
-    --gt-metrics experiments/results/e2_gt/metrics.json --model-name yolo26s_curated
+    --gt-metrics experiments/results/e2_gt/metrics.json --model-name yolo26n_curated
 python experiments/e9_field_ab.py --gt experiments/gt_field/gt.csv --log logs/decisions_*.csv \
     --camera-order camera_55,camera_56,camera_57,camera_58,camera_59
 
 # 10. Numbers for the manuscript
-python experiments/e10_paper_macros.py --model yolo26s_curated --out paper/results_macros.tex
+python experiments/e10_paper_macros.py --model yolo26n_curated --out paper/results_macros.tex
 ```
+
+## GPU workstation (DGX Spark or RTX laptop): E3–E5 with three seeds
+
+`run_gpu_suite.py` runs the trainings of E3, E4 and E5 with seeds 0, 1 and 2 and the full
+protocol of `configs/train.yaml`, resumable and several at a time. All runs compared in the
+paper must come from the same machine.
+
+```bash
+# DGX Spark (ARM64 + Blackwell): use NVIDIA's PyTorch container, then
+pip install ultralytics==8.4.184 roboflow
+export ROBOFLOW_API_KEY=...                       # downloads the 4 variants not in git
+python experiments/run_gpu_suite.py prep --pseudo-csv e3_pseudo_labels.csv
+python experiments/run_gpu_suite.py smoke         # 1 epoch YOLO26n + MobileNetV3: GPU check
+python experiments/run_gpu_suite.py run --jobs 3  # --jobs 1 on a laptop
+python experiments/run_gpu_suite.py summary       # mean +- std per configuration
+# once the human GT exists (gt.csv with paths valid on this machine), without retraining:
+python experiments/run_gpu_suite.py evaluate --gt gt.csv --tag humangt
+```
+
+`e3_pseudo_labels.csv` holds the uncurated cascade label of each frame (computed on the
+original PNG frames); it is distributed with the data, not in git.
+
+## Jetson Orin Nano (reComputer J3011): E6
+
+```bash
+bash experiments/jetson_e6.sh      # builds FP16/FP32 engines of YOLO26n-cls on the device and times batch 1-5
+```
+
+The ONNX it compiles (`runs/classify/magdalena/plant_cls_n_blocksplit_cpu/weights/best.onnx`,
+dynamic batch, 96×320) is the YOLO26n-cls model trained on the leak-free block split; latency
+does not depend on the weights, so it stands in for the final GPU-trained model.
 
 ## Field protocol
 

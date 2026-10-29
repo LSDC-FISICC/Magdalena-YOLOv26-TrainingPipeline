@@ -41,10 +41,15 @@ def load_checkpoint(path):
 
 
 class _FolderSet(Dataset):
-    def __init__(self, root, split):
+    def __init__(self, root, split, augment=False):
         from .models import IMAGENET_MEAN, IMAGENET_STD, load_tensor
         self.rows = list_folder_dataset(root, split)
         self.load, self.mean, self.std = load_tensor, IMAGENET_MEAN[0], IMAGENET_STD[0]
+        if augment:  # same online blur/colour augmentation as the YOLO runs (mexp.train)
+            from PIL import Image
+            from .train import train_transforms
+            tf = train_transforms()
+            self.load = lambda path: tf(Image.open(path).convert("RGB"))
 
     def __len__(self):
         return len(self.rows)
@@ -65,15 +70,15 @@ def _evaluate(model, loader, device):
 
 
 def train(arch, data, out_dir, epochs=30, patience=5, batch=64, lr=1e-3, weight_decay=0.01,
-          label_smoothing=0.1, workers=4, seed=0, device=None, pretrained=True):
-    """No online augmentation (Roboflow already augmented the training split), cosine LR,
-    early stopping on validation accuracy, same as the YOLO protocol."""
+          label_smoothing=0.1, workers=4, seed=0, device=None, pretrained=True, augment=False):
+    """Cosine LR and early stopping on validation accuracy, same as the YOLO protocol. No online
+    augmentation unless ``augment`` (Roboflow already augmented the training split)."""
     torch.manual_seed(seed)
     if device is not None and str(device).isdigit():  # Ultralytics-style GPU index
         device = f"cuda:{device}"
     device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
-    tr = DataLoader(_FolderSet(data, "train"), batch, shuffle=True, num_workers=workers)
+    tr = DataLoader(_FolderSet(data, "train", augment), batch, shuffle=True, num_workers=workers)
     va = DataLoader(_FolderSet(data, "valid"), batch, num_workers=workers)
     model = build(arch, pretrained).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)

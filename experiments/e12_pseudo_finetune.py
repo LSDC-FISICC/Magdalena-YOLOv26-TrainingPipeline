@@ -97,9 +97,11 @@ def build_fold(data, curated, train_groups, dst):
 
 
 def run(args):
+    from mexp import tv_models
     from mexp.models import Predictor
     from mexp.train import load_cfg, train_yolo
     data, work, out = Path(args.data), Path(args.work), Path(args.out)
+    aname = Path(args.arch).stem
     cfg = load_cfg(epochs=args.epochs, patience=args.patience, batch=args.batch)
     folds = {k: v.split(",") for k, v in (f.split("=", 1) for f in args.fold)}
     group_of = {(r["domain"], r["image_id"]): r["group"] for r in read_csv(args.folds)}
@@ -109,22 +111,30 @@ def run(args):
         ddir = work / "data" / f"fold_{fold}"
         n = build_fold(data, Path(args.curated), train_groups, ddir)
         for seed in [int(s) for s in args.seeds.split(",")]:
-            run_name = f"fold{fold}__yolo26n-cls_aug_pseudo__s{seed}"
+            run_name = f"fold{fold}__{aname}_aug_pseudo__s{seed}"
             done = work / f"{run_name}.done.json"
             if done.exists():
                 records.append(json.loads(done.read_text()))
                 continue
             print(f"\n=== {run_name}: pseudo frames {n}, train groups {train_groups}")
-            best = train_yolo(ddir, work / "runs", run_name, cfg=cfg, seed=seed, device=args.device, aug=True)
+            if args.arch in tv_models.ARCHS:
+                best = tv_models.train(args.arch, ddir, work / "runs" / run_name, epochs=cfg["epochs"],
+                                       patience=cfg["patience"], batch=cfg["batch"], seed=seed,
+                                       device=args.device, augment=True)
+            else:
+                best = train_yolo(ddir, work / "runs", run_name, model=args.arch, cfg=cfg, seed=seed,
+                                  device=args.device, aug=True)
             pred = Predictor(best)
-            rec = {"fold": fold, "seed": seed, "weights": str(best), "pseudo": n, "preds": {}}
+            rec = {"fold": fold, "seed": seed, "arch": aname, "weights": str(best), "pseudo": n,
+                   "preds": {}, "probs": {}}
             for dom, gt in gts.items():
                 test = [r for r in gt if group_of.get((dom, r["image_id"])) not in train_groups]
                 if not test:  # e.g. the final model trained on every group
                     continue
-                labels, _ = pred.predict([str(REPO_ROOT / r["path"]) if not Path(r["path"]).is_absolute()
-                                          else r["path"] for r in test])
+                labels, probs = pred.predict([str(REPO_ROOT / r["path"]) if not Path(r["path"]).is_absolute()
+                                              else r["path"] for r in test])
                 rec["preds"][dom] = {r["image_id"]: p for r, p in zip(test, labels)}
+                rec["probs"][dom] = {r["image_id"]: float(q) for r, q in zip(test, probs)}
             done.parent.mkdir(parents=True, exist_ok=True)
             done.write_text(json.dumps(rec))
             records.append(rec)
@@ -138,7 +148,12 @@ def run(args):
             truth = {r["image_id"]: r["label"] for r in gt}
             y, p = [], []
             for r in recs:
+                probs = r.get("probs", {}).get(dom)
                 for iid, lab in r["preds"].get(dom, {}).items():
+                    if iid not in truth:  # e.g. a repeated image left out of a deduplicated GT
+                        continue
+                    if probs is not None:  # --threshold applies when probabilities were stored
+                        lab = "plant" if probs[iid] >= args.threshold else "no_plant"
                     y.append(truth[iid]); p.append(lab)
             if not y:
                 continue
@@ -171,6 +186,9 @@ def main():
     ap.add_argument("--fold", action="append", help="run: NAME=group,group (training groups of the fold)")
     ap.add_argument("--gt", action="append", help="run: domain=gt.csv")
     ap.add_argument("--seeds", default="0")
+    ap.add_argument("--arch", default="yolo26n-cls.pt",
+                    help="run: YOLO weights or a torchvision arch (efficientnet_b0, mobilenet_v3_small, ...)")
+    ap.add_argument("--threshold", type=float, default=0.5, help="run: p(plant) threshold when scoring")
     ap.add_argument("--epochs", type=int)
     ap.add_argument("--patience", type=int)
     ap.add_argument("--batch", type=int)

@@ -24,7 +24,7 @@ Yolo_InferenceNode_v2:
   ros__parameters:
     engine_path: best.engine          # plant_main.engine: E11 model (curated labels, blur/colour augmentation)
     max_batch_size: 5
-    # p(plant) >= plant_threshold opens the valve. 0.3 (E12): night 91.1 % vs 89.7 % at 0.5, day 96.3 vs 96.1
+    # p(plant) >= plant_threshold opens the valve. 0.3 (E12): night 94.5 % vs 93.0 % at 0.5, day 96.3 vs 96.1
     plant_threshold: 0.3
     # Pass-condition switch: while the median blur ratio of a camera's last blur_window frames
     # is below blur_threshold (blurred pass: night, long exposure), that camera is decided by

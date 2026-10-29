@@ -40,15 +40,23 @@ from mexp import debounce  # noqa: E402
 from mexp.data import IMG_EXT, frame_id, list_folder_dataset, read_csv, unique_sources, write_csv  # noqa: E402
 
 
-def sequences_from_logs(paths, method="yolo"):
-    """{(log, camera): [(t_seconds, raw_plant, label=None)]} for one perception method."""
+def sequences_from_logs(paths, method="yolo", second_threshold=0.5):
+    """{(log, camera): [(t_seconds, raw_plant, label=None)]} for one perception method. method
+    "second" replays the engine logged as p_fallback (only logged, not driving the valves) at
+    second_threshold."""
     seq = {}
     for f in paths:
         for r in read_csv(f):
-            if r.get("method", "yolo") != method:
+            if r.get("method", "yolo") != ("yolo" if method == "second" else method):
                 continue
+            if method == "second":
+                if not r.get("p_fallback"):
+                    continue
+                plant = float(r["p_fallback"]) >= second_threshold
+            else:
+                plant = r["raw"] == "1"
             t = int(r["t_capture_ns"] or r["t_logger_rx_ns"]) / 1e9
-            seq.setdefault((Path(f).stem, r["camera"]), []).append((t, r["raw"] == "1", None))
+            seq.setdefault((Path(f).stem, r["camera"]), []).append((t, plant, None))
     return {k: sorted(v) for k, v in seq.items()}
 
 
@@ -84,7 +92,9 @@ def main():
     g.add_argument("--frames")
     ap.add_argument("--weights")
     ap.add_argument("--labeller", help="with --frames: colour-index labeller from mexp.pseudolabel instead of --weights")
-    ap.add_argument("--method", default="yolo", help="decisions to use from the logs: yolo or index")
+    ap.add_argument("--method", default="yolo",
+                    help="decisions to use from the logs: yolo (drove the valves), second (p_fallback) or index")
+    ap.add_argument("--second-threshold", type=float, default=0.5, help="with --method second")
     ap.add_argument("--policies", default="none,time:500,kofn:3/2,kofn:5/3,asym:3/2")
     ap.add_argument("--fps", type=float, default=15.0)
     ap.add_argument("--valves-per-furrow", type=int, default=4)
@@ -97,7 +107,7 @@ def main():
     args = ap.parse_args()
 
     if args.log:
-        seqs = sequences_from_logs([p for f in args.log for p in glob.glob(f)], args.method)
+        seqs = sequences_from_logs([p for f in args.log for p in glob.glob(f)], args.method, args.second_threshold)
     else:
         if not (args.weights or args.labeller):
             sys.exit("--frames needs --weights or --labeller")

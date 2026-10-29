@@ -48,20 +48,24 @@ def stats(x):
             "p95": float(np.percentile(x, 95)), "p99": float(np.percentile(x, 99)), "max": float(x.max())}
 
 
-def modbus_rtt(host, port, coil, n):
+def modbus_rtt(host, port, coil, n, toggle=False):
+    """Round-trip time of write_single_coil. By default each write repeats the value just read, so
+    the valve never moves and the measurement can run next to the controller; toggle=True
+    alternates the coil (bench only: it switches the real valves every 20 ms)."""
     from pyModbusTCP.client import ModbusClient
     c = ModbusClient(host=host, port=port, auto_open=True)
     read_write, write = [], []
     for i in range(n):
         t0 = time.perf_counter()
-        c.read_coils(coil, 1)
+        cur = c.read_coils(coil, 1)
         t1 = time.perf_counter()
-        c.write_single_coil(coil, bool(i % 2))
+        c.write_single_coil(coil, bool(i % 2) if toggle else bool(cur and cur[0]))
         t2 = time.perf_counter()
         write.append((t2 - t1) * 1000)
         read_write.append((t2 - t0) * 1000)
         time.sleep(0.02)
-    c.write_single_coil(coil, True)  # leave the valve open (fail-safe = apply)
+    if toggle:
+        c.write_single_coil(coil, True)  # leave the valve open (fail-safe = apply)
     return stats(write), stats(read_write)
 
 
@@ -70,8 +74,10 @@ def main():
     ap.add_argument("--log", nargs="+", required=True)
     ap.add_argument("--modbus-host")
     ap.add_argument("--modbus-port", type=int, default=502)
-    ap.add_argument("--modbus-coil", type=int, default=0, help="use a coil whose valve can toggle safely")
+    ap.add_argument("--modbus-coil", type=int, default=0)
     ap.add_argument("--modbus-n", type=int, default=500)
+    ap.add_argument("--modbus-toggle", action="store_true",
+                    help="alternate the coil instead of rewriting its value (bench only: moves the valve)")
     ap.add_argument("--valve-open-ms", type=float, default=float("nan"))
     ap.add_argument("--valve-close-ms", type=float, default=float("nan"))
     ap.add_argument("--speed-kmh", type=float, default=float("nan"))
@@ -98,7 +104,7 @@ def main():
 
     modbus_mean = 0.0
     if args.modbus_host:
-        w, rw = modbus_rtt(args.modbus_host, args.modbus_port, args.modbus_coil, args.modbus_n)
+        w, rw = modbus_rtt(args.modbus_host, args.modbus_port, args.modbus_coil, args.modbus_n, args.modbus_toggle)
         stages["modbus_write"], stages["modbus_read_plus_write"] = w, rw
         modbus_mean = w["mean"]
     stages["valve_open"] = {"mean": args.valve_open_ms}

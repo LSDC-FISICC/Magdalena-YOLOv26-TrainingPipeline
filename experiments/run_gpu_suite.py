@@ -255,31 +255,43 @@ def best_val_seed(exp, prefix):
     """(seed, val_top1, weights) of the seed of exp/prefix with the best validation top-1 accuracy."""
     best = None
     for s in SEEDS:
-        res = WORK / exp / "runs" / f"{prefix}__s{s}" / "results.csv"
-        if not res.exists():
+        run = WORK / exp / "runs" / f"{prefix}__s{s}"
+        if (run / "results.csv").exists():  # Ultralytics
+            rows = [{k.strip(): v for k, v in r.items()} for r in csv.DictReader(open(run / "results.csv"))]
+            acc, weights = max(float(r["metrics/accuracy_top1"]) for r in rows), run / "weights" / "best.pt"
+        elif (run / "history.json").exists():  # torchvision (mexp.tv_models)
+            acc, weights = max(h["val_acc"] for h in json.loads((run / "history.json").read_text())), run / "best.pth"
+        else:
             continue
-        rows = [{k.strip(): v for k, v in r.items()} for r in csv.DictReader(open(res))]
-        acc = max(float(r["metrics/accuracy_top1"]) for r in rows)
         if best is None or acc > best[1]:
-            best = (s, acc, res.parent / "weights" / "best.pt")
+            best = (s, acc, weights)
     if best is None:
         sys.exit(f"no finished run for {exp}/{prefix}: run --only {exp} first")
     return best
 
 
 def deploy(args):
-    out = WORK / "deploy"
+    out = Path(args.deploy_dir) if args.deploy_dir else WORK / "deploy"
     out.mkdir(parents=True, exist_ok=True)
     manifest = {}
-    pair = dict(DEPLOY, plant_main=MAIN_E12) if args.main == "e12" else DEPLOY
+    main = MAIN_E12 if args.main == "e12" else DEPLOY["plant_main"]
+    if args.main == "e12" and args.main_arch != "yolo26n-cls":  # E12 with a torchvision classifier
+        main = (f"e12_{args.main_arch}", f"foldALL__{args.main_arch}_aug_pseudo")
+    pair = dict(DEPLOY, plant_main=main)
     for name, (exp, prefix) in pair.items():
         seed, acc, weights = best_val_seed(exp, prefix)
-        dst = out / f"{name}.pt"
-        dst.write_bytes(weights.read_bytes())
+        if weights.suffix == ".pth":  # torchvision: ONNX with normalisation and softmax inside
+            from mexp.tv_models import export_deploy_onnx
+            dst = out / f"{name}.onnx"
+            export_deploy_onnx(weights, dst)
+        else:
+            dst = out / f"{name}.pt"
+            dst.write_bytes(weights.read_bytes())
         manifest[name] = {"experiment": exp, "run": prefix, "seed": seed, "val_top1": acc, "source": str(weights)}
         print(f"{name}: {exp}/{prefix} seed {seed} (val top-1 {100 * acc:.1f}) -> {dst}")
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
-    print(f"-> {out}. On the Jetson: python convert2engine4jetson_v2.py --model <file>.pt for each file")
+    print(f"-> {out}. On the Jetson: python convert2engine4jetson_v2.py --model <file>.pt for each .pt; "
+          "trtexec --onnx=<file>.onnx (see experiments/jetson_e6.sh) for an .onnx")
 
 
 def main():
@@ -292,6 +304,9 @@ def main():
     ap.add_argument("--only", default="e3,e4,e5")
     ap.add_argument("--device", default="0")
     ap.add_argument("--main", choices=["e11", "e12"], default="e11", help="deploy: model used as plant_main")
+    ap.add_argument("--deploy-dir", help="deploy: output folder (default experiments/work/gpu/deploy)")
+    ap.add_argument("--main-arch", default="yolo26n-cls",
+                    help="deploy --main e12: yolo26n-cls or a torchvision arch trained with e12 (efficientnet_b0, ...)")
     args = ap.parse_args()
     {"prep": prep, "smoke": smoke, "run": run, "summary": summary, "evaluate": evaluate,
      "deploy": deploy}[args.step](args)

@@ -119,6 +119,30 @@ def export_onnx(pth, out, batch_dynamic=True):
     return out
 
 
+class _Deployable(nn.Module):
+    """ImageNet normalisation inside and softmax outside: same contract as the YOLO-cls engines
+    (input RGB in [0, 1], NCHW 96x320; output0 = (B, 2) probabilities, 0=no_plant, 1=plant)."""
+
+    def __init__(self, model):
+        super().__init__()
+        from .models import IMAGENET_MEAN, IMAGENET_STD
+        self.model = model
+        self.register_buffer("mean", IMAGENET_MEAN.clone())
+        self.register_buffer("std", IMAGENET_STD.clone())
+
+    def forward(self, x):
+        return torch.softmax(self.model((x - self.mean) / self.std), 1)
+
+
+def export_deploy_onnx(pth, out):
+    """ONNX for the Jetson inference node (drop-in replacement of a YOLO26-cls engine)."""
+    from . import IMG_H, IMG_W
+    m = _Deployable(load_checkpoint(pth)).eval()
+    torch.onnx.export(m, torch.zeros(1, 3, IMG_H, IMG_W), out, input_names=["images"], output_names=["output0"],
+                      dynamic_axes={"images": {0: "batch"}, "output0": {0: "batch"}}, opset_version=17, dynamo=False)
+    return out
+
+
 def complexity(model):
     """Parameter count (M) and GFLOPs of one 96x320 image; works for any nn.Module."""
     import copy

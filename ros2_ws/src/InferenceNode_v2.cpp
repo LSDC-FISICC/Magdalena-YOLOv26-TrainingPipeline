@@ -187,6 +187,8 @@ void InferenceNode_v2::imageCallback(const sensor_msgs::msg::Image::SharedPtr ms
                 array_container.values.push_back(kv("model", useFallback ? "fallback" : "main"));
                 array_container.values.push_back(kv("plant_main", pPlant(results[i]) >= m_plantThreshold ? "true" : "false"));
                 array_container.values.push_back(kv("plant_fallback", pPlant(fallback[i]) >= m_plantThreshold ? "true" : "false"));
+                array_container.values.push_back(kv("p_main", std::to_string(pPlant(results[i]))));
+                array_container.values.push_back(kv("p_fallback", std::to_string(pPlant(fallback[i]))));
             }
             array_container.values.push_back(kv("t_capture_ns", batch_capture_ns[i]));
             array_container.values.push_back(kv("t_preprocessed_ns", std::to_string(msg_time.nanoseconds())));
